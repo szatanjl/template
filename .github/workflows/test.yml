@@ -1,0 +1,41 @@
+name: Test
+run-name: Test -- ${{ inputs.commit }}
+permissions:
+  contents: read
+  statuses: write
+
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: Commit to build
+        type: string
+        required: true
+
+
+jobs:
+
+  job1:
+    name: Test Job Upload
+    uses: ./.github/workflows/_make.yml
+    with:
+      name: job1
+      runs-on: ubuntu-latest
+      description: Job1
+      commit: ${{ inputs.commit }}
+      force: true
+      upload: test123
+      run: echo TEST123 > test123
+
+  job2:
+    name: Test Job Download
+    uses: ./.github/workflows/_make.yml
+    needs: job1
+    with:
+      name: job2
+      description: Job2
+      commit: ${{ inputs.commit }}
+      force: true
+      download: job1
+      run: cat .job1/test123

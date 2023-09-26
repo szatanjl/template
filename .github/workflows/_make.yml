@@ -1,0 +1,135 @@
+name: _make
+run-name: make ${{ inputs.name }} -- ${{ inputs.commit }}
+concurrency: make-${{ inputs.name }}-${{ inputs.commit }}
+permissions:
+  contents: read
+  statuses: write
+defaults:
+  run:
+    shell: bash
+env:
+  NAME: ${{ inputs.name }}
+  DESCRIPTION: ${{ inputs.description }}
+  COMMIT: ${{ inputs.commit }}
+  REPO: ${{ github.repository }}
+  REPO_URL: https://${{ github.actor }}:${{ github.token }}@github.com/${{ github.repository }}.git
+  RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+  STATUS_API: repos/${{ github.repository }}/statuses/${{ inputs.commit }}
+  GH_TOKEN: ${{ github.token }}
+
+
+on:
+  workflow_call:
+    inputs:
+      name:
+        description: Status and artifacts name
+        type: string
+        required: true
+      description:
+        description: Status description
+        type: string
+        required: true
+      commit:
+        description: Commit hash
+        type: string
+        required: true
+      run:
+        description: Commands to run
+        type: string
+        required: true
+      runs-on:
+        description: Machine type to run on
+        type: string
+        default: ubuntu-latest
+      timeout-minutes:
+        description: Job timeout
+        type: number
+        default: 30
+      force:
+        description: Force rerun
+        type: boolean
+        default: false
+      checkout:
+        description: Checkout project code
+        type: boolean
+        default: true
+      download:
+        description: List of artifacts to download
+        type: string
+      upload:
+        description: List of artifacts to upload
+        type: string
+
+
+jobs:
+  make:
+    name: .
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    steps:
+
+      - name: Check If Job Already Run
+        id: prev
+        if: (!inputs.force)
+        run: |
+          status=$(gh api "${STATUS_API}" --paginate -q "
+              map(select(.context == \"${NAME}\")) |
+              sort_by(.updated_at).[-1].state")
+          echo "Status of previous run: ${status}"
+          echo "status=${status}" >> "${GITHUB_OUTPUT}"
+          test "${status}" != failure
+
+      - name: Mark Job as Pending
+        if: steps.prev.outputs.status != 'success'
+        run: gh api "${STATUS_API}" -X POST
+                -f context="${NAME}"
+                -f description="${DESCRIPTION} (pending)"
+                -f state=pending
+                -f target_url="${RUN_URL}"
+
+      - name: Checkout Project Code
+        if: steps.prev.outputs.status != 'success' && inputs.checkout
+        run: |
+          git clone -n --filter=tree:0 --progress -- "${REPO_URL}" .
+          git checkout --recurse-submodules --progress "${COMMIT}" --
+          make version
+          echo 'Generated version information:'
+          sed '/^$/q; s/^/\t/' version.mk
+
+      - name: Download Artifacts
+        if: steps.prev.outputs.status != 'success' && inputs.download
+        run: echo TODO
+
+      - name: Run Job
+        id: make
+        if: steps.prev.outputs.status != 'success'
+        continue-on-error: true
+        run: ${{ inputs.run }}
+
+      - name: Upload Artifacts
+        id: upload
+        if: steps.prev.outputs.status != 'success' && inputs.upload
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ inputs.commit }}-${{ inputs.name }}
+          path: ${{ inputs.upload }}
+          if-no-files-found: error
+
+      - name: Mark Job as Done
+        if: steps.prev.outputs.status != 'success' &&
+            steps.prev.outputs.status != 'failure' && always()
+        run: |
+          case ${OUTCOME} in
+              success-success) status=success ;;
+              failure-success) status=failure ;;
+              *) status=error ;;
+          esac
+          echo "Status of current run: ${status}"
+          gh api "${STATUS_API}" -X POST \
+              -f context="${NAME}" \
+              -f description="${DESCRIPTION} (${status})" \
+              -f state="${status}" \
+              -f target_url="${RUN_URL}"
+          test "${status}" = success
+        env:
+          OUTCOME: ${{ steps.make.outcome }}-${{ steps.upload.outcome }}

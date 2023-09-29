@@ -1,0 +1,21 @@
+# TODO: Change this into a composite action once they get support for
+# pre and post steps: <https://github.com/actions/runner/issues/1478>
+
+name: Setup Job
+description: Setup Job
+
+inputs:
+  commit:
+    description: Commit hash
+    required: true
+  checkout:
+    description: >
+      Directory to checkout project to.  Empty means skip checkout.
+    default: .
+  repo_url:
+    description: Repository URL to checkout
+    default: https://${{ github.actor }}:${{ github.token }}@github.com/${{ github.repository }}.git
+
+runs:
+  using: node20
+  main: main.js

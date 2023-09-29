@@ -1,0 +1,15 @@
+{
+	"name": "setup",
+	"version": "1.0.0",
+	"description": "Setup Job",
+	"license": "MIT",
+	"dependencies": {
+		"@actions/core": "1"
+	},
+	"devDependencies": {
+		"es-check": "7"
+	},
+	"scripts": {
+		"lint": "es-check es3 main.js"
+	}
+}

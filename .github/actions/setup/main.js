@@ -12,7 +12,7 @@ function run(cmd, args, cwd)
 		stdio: "inherit"
 	});
 	if (result.status !== 0 || result.error != null) {
-		throw result.error || Error("Command failed (" + result.status + "): " + cmd + args);
+		throw result.error || Error("Command failed (" + result.status + "): " + cmd + " " + args.join(" "));
 	}
 }
 
@@ -23,7 +23,7 @@ function checkout(repo_url, commit, dir)
 	}
 
 	core.startGroup("Checkout project code");
-	run("git", ["claone", "-n", "--filter=tree:0", "--progress",
+	run("git", ["clone", "-n", "--filter=tree:0", "--progress",
 	            "--", repo_url, dir]);
 	run("git", ["checkout", "--recurse-submodules", "--progress",
 	            commit, "--"], dir);
